@@ -1,0 +1,13 @@
+{
+    "name": "Sample-Python-plugin",
+    "owner": {
+        "name": "JJS"
+    },
+    "plugins": [
+        {
+            "name": "python_plugin",
+            "source": "./pyplugin",
+            "description": "python plugin to creating endpoint, review module, and generate tests"
+        }
+    ]
+}
