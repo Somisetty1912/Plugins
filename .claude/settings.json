@@ -1,5 +1,3 @@
 {
-  "enabledPlugins": {
-    "python_plugin@Sample-Python-plugin": true
-  }
+  "enabledPlugins": {}
 }
