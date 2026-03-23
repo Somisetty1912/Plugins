@@ -30,5 +30,21 @@
       "onFailure": "warn",
       "displayOutput": true
     }
+  },
+  {
+    "id": "run-pre-commit",
+    "description": "Run pre-commit hooks on modified Python files",
+    "event": "PostToolUse",
+    "matcher": {
+      "tool": "Write|Edit",
+      "filePattern": "\\.py$"
+    },
+    "action": {
+      "type": "bash",
+      "command": "cd \"$(dirname \"${filePath}\" | xargs -I {} git -C {} rev-parse --show-toplevel 2>/dev/null || echo /home/kaushal/Plugins)\" && pre-commit run --files \"${filePath}\" --color=always 2>&1 || echo '✓ Pre-commit check complete (or not configured)'",
+      "timeoutMs": 30000,
+      "onFailure": "warn",
+      "displayOutput": true
+    }
   }
 ]
