@@ -1,3 +1,31 @@
 {
-  "enabledPlugins": {}
+  "enabledPlugins": {
+    "python_plugin@Sample-Python-plugin": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, os\nd = json.load(sys.stdin)\nf = d.get('tool_input', {}).get('file_path') or ''\nif not f.endswith('.py'): sys.exit(0)\nos.system(f'ruff format {f!r} && ruff check --fix --quiet {f!r}')\n\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, os\nd = json.load(sys.stdin)\nf = d.get('tool_input', {}).get('file_path') or d.get('tool_input', {}).get('path') or ''\nif not f.endswith('.py'): sys.exit(0)\nlog = '/home/kaushal/Plugins/logs/hook_trigger.log'\nos.makedirs(os.path.dirname(log), exist_ok=True)\nfrom datetime import datetime\nlines = [f'[{datetime.now():%Y-%m-%d %H:%M:%S}] HOOK TRIGGERED on {f}']\ncontent = open(f).read() if os.path.exists(f) else ''\nif 'except:' in content: lines.append('⚠️  Bare except clause - use specific exceptions')\nif 'class Config:' in content: lines.append('⚠️  Pydantic v1 Config - use ConfigDict instead')\nif 'requests.' in content and 'async def' in content: lines.append('⚠️  requests in async - use httpx.AsyncClient')\nif 'time.sleep' in content and 'async def' in content: lines.append('⚠️  time.sleep in async - use asyncio.sleep()')\nif len(lines) == 1: lines.append('✓ Python best practices check passed')\noutput = chr(10).join(lines)\nprint(output)\nopen(log, 'a').write(output + chr(10))\n\""
+          },
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, os\nd = json.load(sys.stdin)\nf = d.get('tool_input', {}).get('file_path') or d.get('tool_input', {}).get('path') or ''\nif not f.endswith('.py'): sys.exit(0)\nroot = os.popen(f'git -C {os.path.dirname(f)!r} rev-parse --show-toplevel 2>/dev/null').read().strip() or '/home/kaushal/Plugins'\nos.system(f'cd {root!r} && pre-commit run --files {f!r} --color=always 2>&1 || echo \\\"✓ Pre-commit check complete\\\"')\n\""
+          }
+        ]
+      }
+    ]
+  }
 }

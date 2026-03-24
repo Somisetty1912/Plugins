@@ -399,117 +399,158 @@ User: @security-auditor check app/routers/ for OWASP issues
 
 ---
 
-## 4️⃣ HOOKS FOLDER (`/pyplugin/hooks/`)
+## 4️⃣ HOOKS (`/.claude/settings.json`)
 
 ### What It Is
-**Hooks** are **automated event-triggered actions** that execute code whenever specific events happen. They're like background jobs that watch for changes and run actions automatically.
+**Hooks** are **automated event-triggered actions** that execute code whenever specific events happen (e.g., after Claude edits a file). They run silently in the background — no invocation needed.
+
+### ⚠️ Critical: Where Hooks Must Live
+
+**Hooks only work when defined in `settings.json`.** Claude Code ignores any other file.
+
+| File | Purpose | Executed by Claude Code? |
+|---|---|---|
+| `pyplugin/hooks/hooks.json` | Documentation only | ❌ No — ignored |
+| `.claude/settings.json` | Official config | ✅ Yes — actually runs |
+
+All 3 hooks in this project are registered in `.claude/settings.json`.
+
+---
+
+### Hook Type: `"command"` not `"bash"`
+
+In `settings.json`, the valid hook type is `"type": "command"` — not `"type": "bash"`.
+The `"bash"` type only existed in the old `hooks.json` custom format which was never executed.
+
+| Type | Where | Runs? |
+|---|---|---|
+| `"type": "bash"` | `hooks.json` (old custom format) | ❌ Never ran |
+| `"type": "command"` | `settings.json` | ✅ Runs via bash |
+
+`"type": "command"` still executes via bash under the hood — it's just the correct name for `settings.json`.
+
+---
+
+### Active Hooks (in `.claude/settings.json`)
+
+#### Hook 1: `auto-format-on-write`
+**Trigger**: After `Write` on any `.py` file
+**What it does**: Runs `ruff format` + `ruff check --fix` to auto-format code
+
+```
+Claude writes app/routers/user.py
+→ Hook fires
+→ ruff formats the file automatically
+```
+
+#### Hook 2: `validate-python-best-practices`
+**Trigger**: After `Edit` or `Write` on any `.py` file
+**What it does**: Scans for 4 anti-patterns and warns if found
+
+| Pattern detected | Warning shown |
+|---|---|
+| `except:` | ⚠️ Bare except clause — use specific exceptions |
+| `class Config:` | ⚠️ Pydantic v1 Config — use ConfigDict instead |
+| `requests.` inside `async def` | ⚠️ requests in async — use httpx.AsyncClient |
+| `time.sleep` inside `async def` | ⚠️ time.sleep in async — use asyncio.sleep() |
+
+**Log file**: Every trigger is recorded in `logs/hook_trigger.log` (visible in VS Code file tree).
+
+```
+[2026-03-24 12:45:04] HOOK TRIGGERED on app/services/user_service.py
+⚠️  Bare except clause - use specific exceptions
+⚠️  requests in async - use httpx.AsyncClient
+⚠️  time.sleep in async - use asyncio.sleep()
+```
+
+To check hook history anytime:
+```bash
+cat logs/hook_trigger.log
+```
+
+#### Hook 3: `run-pre-commit`
+**Trigger**: After `Edit` or `Write` on any `.py` file
+**What it does**: Runs `pre-commit` on the changed file automatically
+
+```
+Claude edits app/services/user_service.py
+→ Hook fires
+→ pre-commit runs all configured checks on that file
+```
+
+---
 
 ### How It Works
-- **Event**: Triggers when specific conditions are met (e.g., file written, command executed)
-- **Condition Matching**: Uses glob patterns and tool filters
-- **Action**: Automatically runs bash commands, Python scripts, or other operations
-- **No invocation needed**: Hooks are passive—you don't call them
 
-### Files in Your Hooks Folder
+```
+Claude uses Edit/Write tool on a .py file
+        ↓
+PostToolUse event fires
+        ↓
+settings.json hooks matched (matcher: "Edit|Write")
+        ↓
+Command runs (python3 inline script / ruff / pre-commit)
+        ↓
+Output shown + logged to logs/hook_trigger.log
+```
 
-#### Hook: `auto-format-on-write`
-**Purpose**: Auto-format Python files after I write them
+---
+
+### Hook Structure in `settings.json`
 
 ```json
 {
-  "id": "auto-format-on-write",
-  "description": "Run ruff format on any .py file after Claude writes to it",
-  "event": "PostToolUse",
-  "matcher": {
-    "tool": "Write",
-    "filePattern": "\\.py$"
-  },
-  "action": {
-    "type": "bash",
-    "command": "ruff format \"${filePath}\" && ruff check --fix --quiet \"${filePath}\"",
-    "timeoutMs": 10000,
-    "onFailure": "warn",
-    "displayOutput": true
-  }
-}
-```
-
-**How it works:**
-1. **Event**: `PostToolUse` — After I use the Write tool
-2. **Matcher**:
-   - Tool must be `Write`
-   - File must end in `.py`
-3. **Action**:
-   - Run `ruff format` on the file
-   - Run `ruff check --fix` to apply fixes
-   - Timeout after 10 seconds
-   - If it fails, show a warning
-   - Display the output
-
-**What happens when I write a Python file:**
-```
-User: Create a FastAPI endpoint
-
-Claude: (uses Write tool to create app/routers/user.py)
-
-Hook triggers → auto-format-on-write activates
-
-Result: Code is automatically formatted with ruff before you see it
-```
-
-### Hook Structure
-
-Every hook needs:
-```json
-{
-  "id": "unique-hook-identifier",
-  "description": "Human-readable description",
-  "event": "PostToolUse|PreToolUse|OnToolFailure|OnCompletion",
-  "matcher": {
-    "tool": "ToolName",
-    "filePattern": "regex pattern",
-    "command": "optional regex"
-  },
-  "action": {
-    "type": "bash|notification|custom",
-    "command": "the command to run",
-    "timeoutMs": 10000,
-    "onFailure": "warn|error|ignore",
-    "displayOutput": true
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "your shell command here"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
 ### Hook Events
 
-| Event | When | Example |
-|-------|------|---------|
-| `PostToolUse` | After a tool succeeds | After I write a file, run formatter |
-| `PreToolUse` | Before a tool executes | Before I delete a file, confirm |
-| `OnToolFailure` | When a tool fails | When bash command errors, notify |
-| `OnCompletion` | When task is fully complete | When I finish implementation, commit |
+| Event | When |
+|-------|------|
+| `PostToolUse` | After a tool succeeds |
+| `PreToolUse` | Before a tool executes |
+| `PostToolUseFailure` | When a tool fails |
+| `SessionStart` | When a Claude session begins |
+| `Stop` | When Claude finishes responding |
 
 ### Adding New Hooks
 
-To auto-run tests after I write test files:
+Add a new entry under `PostToolUse` in `.claude/settings.json`:
+
 ```json
 {
-  "id": "auto-test-on-write",
-  "description": "Run pytest when test files are written",
-  "event": "PostToolUse",
-  "matcher": {
-    "tool": "Write",
-    "filePattern": "^tests/test_.*\\.py$"
-  },
-  "action": {
-    "type": "bash",
-    "command": "pytest ${filePath} -v",
-    "timeoutMs": 30000,
-    "onFailure": "warn",
-    "displayOutput": true
-  }
+  "matcher": "Write",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "python3 -c \"import sys,json,os; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); f.endswith('.py') and os.system(f'pytest {f!r} -v')\""
+    }
+  ]
 }
 ```
+
+### Verifying a Hook is Triggered
+
+Check the log file after any `.py` edit:
+```bash
+cat logs/hook_trigger.log
+```
+
+If the file is empty or missing → hook is not firing (check `settings.json` syntax).
+If entries appear → hook is working correctly.
 
 ---
 
@@ -733,15 +774,25 @@ tool_permissions:
 invoke_with: "@agent-name"
 ```
 
-### hooks/hook.json Structure
+### `.claude/settings.json` Hook Structure
 ```json
 {
-  "id": "hook-id",
-  "event": "PostToolUse|PreToolUse|OnToolFailure|OnCompletion",
-  "matcher": { "tool": "ToolName", "filePattern": "pattern" },
-  "action": { "type": "bash", "command": "cmd", "timeoutMs": 10000 }
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "your command here"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
+> ⚠️ `"type": "command"` is required — `"type": "bash"` is not valid in `settings.json`
 
 ---
 
