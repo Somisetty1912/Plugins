@@ -25,7 +25,7 @@
     },
     "action": {
       "type": "bash",
-      "command": "grep -n 'except:' \"${filePath}\" && echo '⚠️  Bare except clause - use specific exceptions' || true; grep -n 'class Config:' \"${filePath}\" && echo '⚠️  Pydantic v1 Config class - use ConfigDict instead' || true; grep -n 'requests\\.' \"${filePath}\" && grep -q 'async def' \"${filePath}\" && echo '⚠️  requests in async code - use httpx.AsyncClient' || true; grep -n 'time\\.sleep' \"${filePath}\" && grep -q 'async def' \"${filePath}\" && echo '⚠️  time.sleep in async - use asyncio.sleep()' || true; echo '✓ Python best practices check complete'",
+      "command": "echo \"[$(date '+%Y-%m-%d %H:%M:%S')] HOOK TRIGGERED: validate-python-best-practices on ${filePath}\" | tee -a /tmp/claude_hooks.log; grep -n 'except:' \"${filePath}\" && echo '⚠️  Bare except clause - use specific exceptions' || true; grep -n 'class Config:' \"${filePath}\" && echo '⚠️  Pydantic v1 Config class - use ConfigDict instead' || true; grep -n 'requests\\.' \"${filePath}\" && grep -q 'async def' \"${filePath}\" && echo '⚠️  requests in async code - use httpx.AsyncClient' || true; grep -n 'time\\.sleep' \"${filePath}\" && grep -q 'async def' \"${filePath}\" && echo '⚠️  time.sleep in async - use asyncio.sleep()' || true; echo '✓ Python best practices check complete'",
       "timeoutMs": 5000,
       "onFailure": "warn",
       "displayOutput": true
